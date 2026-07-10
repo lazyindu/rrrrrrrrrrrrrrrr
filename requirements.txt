@@ -11,8 +11,7 @@ requests
 bs4
 fuzzywuzzy
 python-Levenshtein
-git+https://github.com/cinemagoer/cinemagoer
-# imdbpy==2022.7.9
+cinemagoer==2023.5.1
 aiohttp
 pytz
 hachoir
