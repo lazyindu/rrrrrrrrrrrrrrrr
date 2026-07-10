@@ -201,8 +201,10 @@ async def file_handler(request: web.Request):
 
 # --- Dynamic Direct File ID Streaming Route ---
 from pyrogram.file_id import FileId
+from urllib.parse import unquote, quote
 
 @routes.get(r"/dl/{file_id}", allow_head=True)
+@routes.get(r"/dl/{file_id}/{file_name}", allow_head=True)
 async def bot_download_handler(request: web.Request):
     try:
         file_id_str = request.match_info["file_id"]
@@ -211,10 +213,13 @@ async def bot_download_handler(request: web.Request):
         except Exception as e:
             raise web.HTTPBadRequest(text=f"Invalid file_id format: {str(e)}")
 
+        # Get file name from URL path or query parameters, and decode it
+        file_name_raw = request.match_info.get("file_name") or request.rel_url.query.get("name", "")
+        file_name = unquote(file_name_raw)
+
         # Retrieve file metadata passed from Laravel via query parameters
         file_size = int(request.rel_url.query.get("size", 0))
         mime_type = request.rel_url.query.get("mime", "application/octet-stream")
-        file_name = request.rel_url.query.get("name", "")
 
         setattr(file_id, "file_size", file_size)
         setattr(file_id, "mime_type", mime_type)
@@ -290,6 +295,7 @@ async def media_streamer_by_file_id(request: web.Request, file_id: FileId):
             mime_type = "application/octet-stream"
             file_name = f"{secrets.token_hex(2)}.unknown"
 
+    encoded_filename = quote(file_name)
     return web.Response(
         status=206 if range_header else 200,
         body=body,
@@ -297,7 +303,7 @@ async def media_streamer_by_file_id(request: web.Request, file_id: FileId):
             "Content-Type": f"{mime_type}",
             "Content-Range": f"bytes {from_bytes}-{until_bytes}/{file_size}",
             "Content-Length": str(req_length),
-            "Content-Disposition": f'{disposition}; filename="{file_name}"',
+            "Content-Disposition": f'{disposition}; filename="{file_name}"; filename*=UTF-8\'\'{encoded_filename}',
             "Accept-Ranges": "bytes",
         },
     )
