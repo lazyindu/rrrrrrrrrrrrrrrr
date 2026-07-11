@@ -117,15 +117,23 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
     
     file_size = file_id.file_size
 
+    from_bytes = 0
+    until_bytes = file_size - 1
+    
     if range_header:
-        from_bytes, until_bytes = range_header.replace("bytes=", "").split("-")
-        from_bytes = int(from_bytes)
-        until_bytes = int(until_bytes) if until_bytes else file_size - 1
+        range_match = re.search(r"bytes\s*=\s*(\d+)\s*-\s*(\d*)", str(range_header), re.IGNORECASE)
+        if range_match:
+            from_bytes = int(range_match.group(1))
+            if range_match.group(2):
+                until_bytes = int(range_match.group(2))
+        else:
+            from_bytes = 0
+            until_bytes = file_size - 1
     else:
         from_bytes = request.http_range.start or 0
         until_bytes = (request.http_range.stop or file_size) - 1
 
-    if (until_bytes > file_size) or (from_bytes < 0) or (until_bytes < from_bytes):
+    if (until_bytes >= file_size) or (from_bytes < 0) or (until_bytes < from_bytes):
         return web.Response(
             status=416,
             body="416: Range not satisfiable",
@@ -162,16 +170,22 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
             mime_type = "application/octet-stream"
             file_name = f"{secrets.token_hex(2)}.unknown"
 
+    response_headers = {
+        "Content-Type": f"{mime_type}",
+        "Content-Length": str(req_length),
+        "Content-Disposition": f'{disposition}; filename="{file_name}"',
+        "Accept-Ranges": "bytes",
+        "ETag": f'"{id}"',
+        "Last-Modified": "Fri, 01 Jan 2026 00:00:00 GMT",
+        "Cache-Control": "public, max-age=31536000",
+    }
+    if range_header:
+        response_headers["Content-Range"] = f"bytes {from_bytes}-{until_bytes}/{file_size}"
+
     return web.Response(
         status=206 if range_header else 200,
         body=body,
-        headers={
-            "Content-Type": f"{mime_type}",
-            "Content-Range": f"bytes {from_bytes}-{until_bytes}/{file_size}",
-            "Content-Length": str(req_length),
-            "Content-Disposition": f'{disposition}; filename="{file_name}"',
-            "Accept-Ranges": "bytes",
-        },
+        headers=response_headers,
     )
 
 @routes.get(r"/getfile/{unique_id}", allow_head=True)
@@ -249,15 +263,23 @@ async def media_streamer_by_file_id(request: web.Request, file_id: FileId):
         
     file_size = file_id.file_size
 
+    from_bytes = 0
+    until_bytes = file_size - 1
+    
     if range_header:
-        from_bytes, until_bytes = range_header.replace("bytes=", "").split("-")
-        from_bytes = int(from_bytes)
-        until_bytes = int(until_bytes) if until_bytes else file_size - 1
+        range_match = re.search(r"bytes\s*=\s*(\d+)\s*-\s*(\d*)", str(range_header), re.IGNORECASE)
+        if range_match:
+            from_bytes = int(range_match.group(1))
+            if range_match.group(2):
+                until_bytes = int(range_match.group(2))
+        else:
+            from_bytes = 0
+            until_bytes = file_size - 1
     else:
         from_bytes = request.http_range.start or 0
         until_bytes = (request.http_range.stop or file_size) - 1
 
-    if (until_bytes > file_size) or (from_bytes < 0) or (until_bytes < from_bytes):
+    if (until_bytes >= file_size) or (from_bytes < 0) or (until_bytes < from_bytes):
         return web.Response(
             status=416,
             body="416: Range not satisfiable",
@@ -296,14 +318,20 @@ async def media_streamer_by_file_id(request: web.Request, file_id: FileId):
             file_name = f"{secrets.token_hex(2)}.unknown"
 
     encoded_filename = quote(file_name)
+    response_headers = {
+        "Content-Type": f"{mime_type}",
+        "Content-Length": str(req_length),
+        "Content-Disposition": f'{disposition}; filename="{file_name}"; filename*=UTF-8\'\'{encoded_filename}',
+        "Accept-Ranges": "bytes",
+        "ETag": f'"{file_id_str[:32]}"',
+        "Last-Modified": "Fri, 01 Jan 2026 00:00:00 GMT",
+        "Cache-Control": "public, max-age=31536000",
+    }
+    if range_header:
+        response_headers["Content-Range"] = f"bytes {from_bytes}-{until_bytes}/{file_size}"
+
     return web.Response(
         status=206 if range_header else 200,
         body=body,
-        headers={
-            "Content-Type": f"{mime_type}",
-            "Content-Range": f"bytes {from_bytes}-{until_bytes}/{file_size}",
-            "Content-Length": str(req_length),
-            "Content-Disposition": f'{disposition}; filename="{file_name}"; filename*=UTF-8\'\'{encoded_filename}',
-            "Accept-Ranges": "bytes",
-        },
+        headers=response_headers,
     )
