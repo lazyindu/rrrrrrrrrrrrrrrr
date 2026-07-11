@@ -239,14 +239,14 @@ async def bot_download_handler(request: web.Request):
         setattr(file_id, "mime_type", mime_type)
         setattr(file_id, "file_name", file_name)
 
-        return await media_streamer_by_file_id(request, file_id)
+        return await media_streamer_by_file_id(request, file_id, file_id_str)
     except (AttributeError, BadStatusLine, ConnectionResetError):
         pass
     except Exception as e:
         logging.critical(e.with_traceback(None))
         raise web.HTTPInternalServerError(text=str(e))
 
-async def media_streamer_by_file_id(request: web.Request, file_id: FileId):
+async def media_streamer_by_file_id(request: web.Request, file_id: FileId, file_id_str: str):
     range_header = request.headers.get("Range", 0)
     
     index = min(work_loads, key=work_loads.get)
